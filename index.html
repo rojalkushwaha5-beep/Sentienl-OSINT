@@ -1,0 +1,207 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sentinel OSINT</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <aside class="sidebar">
+    <h2>◈ SENTINEL</h2>
+    <p class="muted">OSINT WORKSTATION</p>
+    <nav>
+      <a href="#overview">Overview</a>
+      <a href="#domain">Domain intelligence</a>
+      <a href="#dns">DNS reconnaissance</a>
+      <a href="#ip">IP lookup</a>
+      <a href="#security">Website security</a>
+      <a href="#username">Username checker</a>
+      <a href="#email">Email OSINT</a>
+      <a href="#device">Device monitor</a>
+    </nav>
+    <button class="secondary" onclick="exportReport()">Export report JSON</button>
+  </aside>
+
+  <main>
+    <header id="overview">
+      <div>
+        <p class="eyebrow">OPEN-SOURCE INTELLIGENCE</p>
+        <h1>Sentinel OSINT</h1>
+        <p class="muted">Public-data reconnaissance and system monitoring</p>
+      </div>
+      <span class="status">● SYSTEM READY</span>
+    </header>
+
+    <section class="cards">
+      <article class="card">
+        <p class="muted">CPU USAGE</p>
+        <h2 id="cpu">—</h2>
+      </article>
+      <article class="card">
+        <p class="muted">MEMORY USAGE</p>
+        <h2 id="memory">—</h2>
+      </article>
+      <article class="card">
+        <p class="muted">DISK USAGE</p>
+        <h2 id="disk">—</h2>
+      </article>
+    </section>
+
+    <section class="panel" id="domain">
+      <h2>Domain intelligence</h2>
+      <p class="muted">Resolve public DNS records and check HTTPS reachability.</p>
+      <div class="input-row">
+        <input id="domainInput" placeholder="example.com">
+        <button onclick="runTool('domain', {domain: value('domainInput')})">Analyze domain</button>
+      </div>
+    </section>
+
+    <section class="panel" id="dns">
+      <h2>DNS reconnaissance</h2>
+      <div class="input-row">
+        <input id="dnsInput" placeholder="example.com">
+        <button onclick="runTool('dns', {domain: value('dnsInput')})">Resolve records</button>
+      </div>
+    </section>
+
+    <section class="panel" id="ip">
+      <h2>IP intelligence</h2>
+      <div class="input-row">
+        <input id="ipInput" placeholder="8.8.8.8">
+        <button onclick="runTool('ip', {ip: value('ipInput')})">Look up IP</button>
+      </div>
+    </section>
+
+    <section class="panel" id="security">
+      <h2>Website security headers</h2>
+      <div class="input-row">
+        <input id="securityInput" placeholder="example.com">
+        <button onclick="runTool('security', {domain: value('securityInput')})">Check website</button>
+      </div>
+    </section>
+
+    <section class="panel" id="username">
+      <h2>Username checker</h2>
+      <div class="input-row">
+        <input id="usernameInput" placeholder="public_username">
+        <button onclick="runTool('username', {username: value('usernameInput')})">Check profiles</button>
+      </div>
+    </section>
+
+    <section class="panel" id="email">
+      <h2>Email OSINT</h2>
+      <div class="input-row">
+        <input id="emailInput" type="email" placeholder="user@example.com">
+        <button onclick="runTool('email', {email: value('emailInput')})">Check email domain</button>
+      </div>
+    </section>
+
+    <section class="panel" id="device">
+      <h2>Device monitor</h2>
+      <button onclick="loadDevice()">Refresh device information</button>
+      <pre id="deviceOutput">Loading…</pre>
+    </section>
+
+    <section class="panel">
+      <h2>Investigation output</h2>
+      <div class="toolbar">
+        <span id="resultStatus" class="muted">Ready for a query.</span>
+        <button class="secondary" onclick="copyOutput()">Copy output</button>
+      </div>
+      <pre id="output">Results will appear here.</pre>
+    </section>
+
+    <footer>Sentinel OSINT · Use only for lawful, authorized research.</footer>
+  </main>
+
+  <script>
+    const report = [];
+
+    function value(id) {
+      return document.getElementById(id).value.trim();
+    }
+
+    async function runTool(endpoint, payload) {
+      const output = document.getElementById("output");
+      const status = document.getElementById("resultStatus");
+
+      if (!Object.values(payload).every(v => v)) {
+        status.textContent = "Please enter a value first.";
+        return;
+      }
+
+      status.textContent = "Query running…";
+      output.textContent = "Working…";
+
+      try {
+        const response = await fetch("/api/" + endpoint, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify(payload)
+        });
+
+        const data = await response.json();
+        output.textContent = JSON.stringify(data, null, 2);
+        status.textContent = response.ok ? "Query complete" : "Query returned an error";
+
+        report.push({
+          tool: endpoint,
+          queried_at: new Date().toISOString(),
+          input: payload,
+          result: data
+        });
+      } catch (error) {
+        output.textContent = String(error);
+        status.textContent = "Request failed";
+      }
+    }
+
+    async function loadDevice() {
+      const response = await fetch("/api/device");
+      const data = await response.json();
+
+      document.getElementById("deviceOutput").textContent =
+        JSON.stringify(data, null, 2);
+
+      if (!data.error) {
+        document.getElementById("cpu").textContent = data.cpu_percent + "%";
+        document.getElementById("memory").textContent = data.memory_percent + "%";
+        document.getElementById("disk").textContent = data.disk_percent + "%";
+      }
+    }
+
+    function exportReport() {
+      const blob = new Blob([
+        JSON.stringify({
+          application: "Sentinel OSINT",
+          exported_at: new Date().toISOString(),
+          findings: report
+        }, null, 2)
+      ], {type: "application/json"});
+
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "sentinel-osint-report.json";
+      link.click();
+      URL.revokeObjectURL(url);
+    }
+
+    async function copyOutput() {
+      const text = document.getElementById("output").textContent;
+      try {
+        await navigator.clipboard.writeText(text);
+        document.getElementById("resultStatus").textContent = "Copied.";
+      } catch {
+        document.getElementById("resultStatus").textContent =
+          "Clipboard unavailable; select and copy the output manually.";
+      }
+    }
+
+    loadDevice();
+    setInterval(loadDevice, 5000);
+  </script>
+</body>
+</html>
